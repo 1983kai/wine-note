@@ -1,65 +1,154 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import PhotoUpload from "@/components/PhotoUpload";
+import WineForm from "@/components/WineForm";
+import type { WineLabel } from "@/lib/gemini";
+import type { WineFormData } from "@/components/WineForm";
+
+type State = "idle" | "analyzing" | "form" | "saved";
 
 export default function Home() {
+  const [state, setState] = useState<State>("idle");
+  const [imagePreview, setImagePreview] = useState("");
+  const [wineData, setWineData] = useState<WineLabel | null>(null);
+  const [error, setError] = useState("");
+  const [toast, setToast] = useState("");
+
+  const handleImageSelect = async (base64: string, mimeType: string, preview: string) => {
+    setImagePreview(preview);
+    setState("analyzing");
+    setError("");
+
+    try {
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64, mimeType }),
+      });
+
+      if (!res.ok) throw new Error("분석 실패");
+      const data = await res.json();
+      setWineData(data);
+      setState("form");
+    } catch {
+      setError("라벨 분석에 실패했어요. 다시 시도해주세요.");
+      setState("idle");
+    }
+  };
+
+  const handleSave = async (formData: WineFormData) => {
+    const res = await fetch("/api/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(formData),
+    });
+
+    if (!res.ok) throw new Error("저장 실패");
+
+    setState("saved");
+    setToast("Notion에 저장되었습니다 ✓");
+    setTimeout(() => {
+      setToast("");
+      setState("idle");
+      setImagePreview("");
+      setWineData(null);
+    }, 3000);
+  };
+
+  const handleReset = () => {
+    setState("idle");
+    setImagePreview("");
+    setWineData(null);
+    setError("");
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="min-h-dvh flex flex-col">
+      {/* Header */}
+      <header className="flex items-center gap-3 px-6 pt-8 pb-4">
+        <WineGlass />
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Wine Note</h1>
+          <p className="text-xs text-white/40">AI 와인 라벨 스캐너</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </header>
+
+      <div className="flex-1 px-6 pb-8 pt-4">
+        {/* Idle: upload UI */}
+        {state === "idle" && (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] gap-8">
+            <div className="text-center space-y-2">
+              <div className="flex justify-center mb-4">
+                <WineGlass size={64} />
+              </div>
+              <p className="text-white/60 text-sm max-w-xs">
+                와인 라벨 사진을 찍거나 업로드하면<br />AI가 자동으로 정보를 분석해요
+              </p>
+            </div>
+            <PhotoUpload onImageSelect={handleImageSelect} />
+            {error && (
+              <p className="text-red-400 text-sm text-center">{error}</p>
+            )}
+          </div>
+        )}
+
+        {/* Analyzing */}
+        {state === "analyzing" && (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
+            {imagePreview && (
+              <div className="w-48 h-64 rounded-2xl overflow-hidden border border-white/10">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={imagePreview} alt="분석 중" className="w-full h-full object-contain bg-black/40" />
+              </div>
+            )}
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-8 h-8 border-2 border-[#8b1a2e] border-t-transparent rounded-full animate-spin" />
+              <p className="text-white/60 text-sm">라벨을 분석하고 있어요...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Form */}
+        {state === "form" && wineData && (
+          <WineForm
+            initial={wineData}
+            imagePreview={imagePreview}
+            onSave={handleSave}
+            onReset={handleReset}
+          />
+        )}
+
+        {/* Saved */}
+        {state === "saved" && (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+            <div className="w-16 h-16 rounded-full bg-[#8b1a2e]/20 flex items-center justify-center">
+              <svg className="w-8 h-8 text-[#8b1a2e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <p className="text-white font-medium">저장 완료!</p>
+            <p className="text-white/40 text-sm">Notion 데이터베이스에 기록되었습니다</p>
+          </div>
+        )}
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-[#8b1a2e] text-white text-sm px-5 py-3 rounded-full shadow-lg z-50">
+          {toast}
         </div>
-      </main>
-    </div>
+      )}
+    </main>
+  );
+}
+
+function WineGlass({ size = 28 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"
+      className="text-[#8b1a2e] flex-shrink-0">
+      <path d="M8 22h8M12 22v-6M6 2h12l-2 8a4 4 0 01-8 0L6 2z" />
+    </svg>
   );
 }
