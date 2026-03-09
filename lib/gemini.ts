@@ -12,7 +12,7 @@ export interface WineLabel {
 }
 
 export async function analyzeWineLabel(base64Image: string, mimeType: string): Promise<WineLabel> {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
   const prompt = `Analyze this wine label image and extract the following information in JSON format:
 {
