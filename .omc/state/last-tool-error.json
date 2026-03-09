@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"gh repo create wine-note --public --source=~/wine-note --remote=origin --push 2>&1\",\"description\":\"Create GitHub repo and push\"}",
+  "error": "Exit code 1\n/Users/kaikim/wine-note/~/wine-note is not a git repository. Run `git -C \"~/wine-note\" init` to initialize it\n\n/Users/kaikim/wine-note/~/wine-note is not a git repository. Run `git -C \"~/wine-note\" init` to initialize it",
+  "timestamp": "2026-03-09T17:32:44.131Z",
+  "retry_count": 1
+}

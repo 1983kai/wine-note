@@ -12,9 +12,10 @@ export async function POST(req: NextRequest) {
     const result = await analyzeWineLabel(image, mimeType || "image/jpeg");
     return NextResponse.json(result);
   } catch (error) {
-    console.error("Analyze error:", error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("Analyze error:", msg);
     return NextResponse.json(
-      { error: "Failed to analyze wine label" },
+      { error: "Failed to analyze wine label", detail: msg },
       { status: 500 }
     );
   }

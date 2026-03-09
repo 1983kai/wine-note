@@ -27,12 +27,16 @@ export default function Home() {
         body: JSON.stringify({ image: base64, mimeType }),
       });
 
-      if (!res.ok) throw new Error("분석 실패");
       const data = await res.json();
+      if (!res.ok) {
+        setError(`분석 실패: ${data.detail || data.error || res.status}`);
+        setState("idle");
+        return;
+      }
       setWineData(data);
       setState("form");
-    } catch {
-      setError("라벨 분석에 실패했어요. 다시 시도해주세요.");
+    } catch (e) {
+      setError(`오류: ${e instanceof Error ? e.message : String(e)}`);
       setState("idle");
     }
   };
