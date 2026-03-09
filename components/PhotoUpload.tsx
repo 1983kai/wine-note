@@ -6,47 +6,66 @@ interface Props {
   onImageSelect: (base64: string, mimeType: string, preview: string) => void;
 }
 
+const SUPPORTED = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+
+// Always convert image to JPEG via canvas — handles HEIC and oversized images
+function toJpeg(dataUrl: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1024;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
+        else { width = Math.round(width * MAX / height); height = MAX; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("Canvas unavailable")); return; }
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(img, 0, 0, width, height);
+      const result = canvas.toDataURL("image/jpeg", 0.88);
+      if (result.length < 500) { reject(new Error("Canvas output invalid")); return; }
+      resolve(result);
+    };
+    img.onerror = () => reject(new Error("Image load failed"));
+    img.src = dataUrl;
+  });
+}
+
 export default function PhotoUpload({ onImageSelect }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = (file: File) => {
+  const handleFile = async (file: File) => {
+    // Check format — reject HEIC/HEIF upfront
+    const type = file.type.toLowerCase();
+    if (type.includes("heic") || type.includes("heif")) {
+      alert("HEIC 포맷은 지원하지 않습니다.\n사진 앱에서 JPEG로 공유하거나, 사진 촬영 버튼을 사용해주세요.");
+      return;
+    }
+
     const reader = new FileReader();
     reader.onerror = () => alert("파일 읽기 실패");
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const dataUrl = e.target?.result as string;
       if (!dataUrl) { alert("이미지 로드 실패"); return; }
+
       try {
-        const img = new Image();
-        img.onerror = () => {
-          // fallback: send as-is
+        const jpeg = await toJpeg(dataUrl);
+        const base64 = jpeg.split(",")[1];
+        onImageSelect(base64, "image/jpeg", jpeg);
+      } catch (err) {
+        // Canvas failed — try sending as-is if it's a supported format
+        if (SUPPORTED.includes(type)) {
           const base64 = dataUrl.split(",")[1];
-          const mimeType = dataUrl.match(/:(.*?);/)?.[1] || "image/jpeg";
-          onImageSelect(base64, mimeType, dataUrl);
-        };
-        img.onload = () => {
-          try {
-            const MAX = 1280;
-            let { width, height } = img;
-            if (width > MAX || height > MAX) {
-              if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
-              else { width = Math.round(width * MAX / height); height = MAX; }
-            }
-            const canvas = document.createElement("canvas");
-            canvas.width = width;
-            canvas.height = height;
-            canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
-            const resized = canvas.toDataURL("image/jpeg", 0.85);
-            onImageSelect(resized.split(",")[1], "image/jpeg", resized);
-          } catch {
-            // canvas failed, send original
-            const base64 = dataUrl.split(",")[1];
-            onImageSelect(base64, file.type || "image/jpeg", dataUrl);
-          }
-        };
-        img.src = dataUrl;
-      } catch {
-        alert("이미지 처리 오류");
+          onImageSelect(base64, type, dataUrl);
+        } else {
+          alert(`이미지 처리 실패: ${err instanceof Error ? err.message : "알 수 없는 오류"}`);
+        }
       }
     };
     reader.readAsDataURL(file);
@@ -55,6 +74,7 @@ export default function PhotoUpload({ onImageSelect }: Props) {
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) handleFile(file);
+    e.target.value = ""; // allow re-selecting same file
   };
 
   return (
@@ -62,7 +82,7 @@ export default function PhotoUpload({ onImageSelect }: Props) {
       {/* Camera */}
       <button
         onClick={() => cameraRef.current?.click()}
-        className="flex items-center justify-center gap-3 w-full py-4 rounded-2xl border border-wine/40 bg-wine/10 text-wine hover:bg-wine/20 transition-colors text-lg font-medium"
+        className="flex items-center justify-center gap-3 w-full py-4 rounded-2xl border border-[#8b1a2e]/40 bg-[#8b1a2e]/10 text-[#8b1a2e] hover:bg-[#8b1a2e]/20 transition-colors text-lg font-medium"
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -72,8 +92,8 @@ export default function PhotoUpload({ onImageSelect }: Props) {
         </svg>
         사진 촬영
       </button>
-      <input ref={cameraRef} type="file" accept="image/*" capture="environment"
-        className="hidden" onChange={onChange} />
+      <input ref={cameraRef} type="file" accept="image/jpeg,image/png,image/webp"
+        capture="environment" className="hidden" onChange={onChange} />
 
       {/* Gallery */}
       <button
@@ -86,7 +106,7 @@ export default function PhotoUpload({ onImageSelect }: Props) {
         </svg>
         갤러리에서 선택
       </button>
-      <input ref={fileRef} type="file" accept="image/*"
+      <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif"
         className="hidden" onChange={onChange} />
     </div>
   );

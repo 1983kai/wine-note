@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeWineLabel } from "@/lib/gemini";
 
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   try {
     const { image, mimeType } = await req.json();
@@ -8,6 +10,9 @@ export async function POST(req: NextRequest) {
     if (!image) {
       return NextResponse.json({ error: "No image provided" }, { status: 400 });
     }
+
+    const sizeKB = Math.round(image.length * 0.75 / 1024);
+    console.log(`Image: ${mimeType}, ~${sizeKB}KB`);
 
     const result = await analyzeWineLabel(image, mimeType || "image/jpeg");
     return NextResponse.json(result);
