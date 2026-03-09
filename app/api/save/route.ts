@@ -9,6 +9,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Wine name is required" }, { status: 400 });
     }
 
+    const tokenPreview = process.env.NOTION_API_KEY?.slice(0, 15) ?? "MISSING";
+    console.log(`Notion token prefix: ${tokenPreview}, DB: ${process.env.NOTION_DATABASE_ID}`);
     const pageId = await saveWineToNotion(entry);
     return NextResponse.json({ success: true, pageId });
   } catch (error) {
