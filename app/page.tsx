@@ -48,7 +48,10 @@ export default function Home() {
       body: JSON.stringify(formData),
     });
 
-    if (!res.ok) throw new Error("저장 실패");
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || data.error || "저장 실패");
+    }
 
     setState("saved");
     setToast("Notion에 저장되었습니다 ✓");

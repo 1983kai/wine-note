@@ -43,11 +43,19 @@ export default function WineForm({ initial, imagePreview, onSave, onReset }: Pro
   const set = (key: keyof WineFormData, value: string | number | null) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  const [saveError, setSaveError] = useState("");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    await onSave(form);
-    setSaving(false);
+    setSaveError("");
+    try {
+      await onSave(form);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "저장 실패");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -141,13 +149,16 @@ export default function WineForm({ initial, imagePreview, onSave, onReset }: Pro
         </div>
       </section>
 
+      {saveError && (
+        <p className="text-red-400 text-sm text-center">{saveError}</p>
+      )}
       <div className="flex gap-3 pt-2">
         <button type="button" onClick={onReset}
           className="flex-1 py-4 rounded-2xl border border-white/10 text-white/50 hover:bg-white/5 transition-colors">
           다시 촬영
         </button>
         <button type="submit" disabled={saving}
-          className="flex-2 flex-[2] py-4 rounded-2xl bg-wine text-white font-semibold hover:bg-wine/80 transition-colors disabled:opacity-50">
+          className="flex-2 flex-[2] py-4 rounded-2xl bg-[#8b1a2e] text-white font-semibold hover:bg-[#8b1a2e]/80 transition-colors disabled:opacity-50">
           {saving ? "저장 중..." : "Notion에 저장"}
         </button>
       </div>
