@@ -14,9 +14,23 @@ export default function PhotoUpload({ onImageSelect }: Props) {
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
-      const [header, base64] = dataUrl.split(",");
-      const mimeType = header.match(/:(.*?);/)?.[1] || "image/jpeg";
-      onImageSelect(base64, mimeType, dataUrl);
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1280;
+        let { width, height } = img;
+        if (width > MAX || height > MAX) {
+          if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
+          else { width = Math.round(width * MAX / height); height = MAX; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+        const resized = canvas.toDataURL("image/jpeg", 0.85);
+        const base64 = resized.split(",")[1];
+        onImageSelect(base64, "image/jpeg", resized);
+      };
+      img.src = dataUrl;
     };
     reader.readAsDataURL(file);
   };
