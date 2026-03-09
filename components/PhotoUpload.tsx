@@ -6,9 +6,7 @@ interface Props {
   onImageSelect: (base64: string, mimeType: string, preview: string) => void;
 }
 
-const SUPPORTED = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-
-// Always convert image to JPEG via canvas — handles HEIC and oversized images
+// Convert any image to JPEG via canvas (handles HEIC on iOS Safari natively)
 function toJpeg(dataUrl: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -23,15 +21,15 @@ function toJpeg(dataUrl: string): Promise<string> {
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext("2d");
-      if (!ctx) { reject(new Error("Canvas unavailable")); return; }
+      if (!ctx) { reject(new Error("Canvas 불가")); return; }
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, width, height);
       ctx.drawImage(img, 0, 0, width, height);
       const result = canvas.toDataURL("image/jpeg", 0.88);
-      if (result.length < 500) { reject(new Error("Canvas output invalid")); return; }
+      if (result.length < 500) { reject(new Error("이미지 변환 실패")); return; }
       resolve(result);
     };
-    img.onerror = () => reject(new Error("Image load failed"));
+    img.onerror = () => reject(new Error("이미지를 열 수 없습니다"));
     img.src = dataUrl;
   });
 }
@@ -41,31 +39,16 @@ export default function PhotoUpload({ onImageSelect }: Props) {
   const cameraRef = useRef<HTMLInputElement>(null);
 
   const handleFile = async (file: File) => {
-    // Check format — reject HEIC/HEIF upfront
-    const type = file.type.toLowerCase();
-    if (type.includes("heic") || type.includes("heif")) {
-      alert("HEIC 포맷은 지원하지 않습니다.\n사진 앱에서 JPEG로 공유하거나, 사진 촬영 버튼을 사용해주세요.");
-      return;
-    }
-
     const reader = new FileReader();
     reader.onerror = () => alert("파일 읽기 실패");
     reader.onload = async (e) => {
       const dataUrl = e.target?.result as string;
       if (!dataUrl) { alert("이미지 로드 실패"); return; }
-
       try {
         const jpeg = await toJpeg(dataUrl);
-        const base64 = jpeg.split(",")[1];
-        onImageSelect(base64, "image/jpeg", jpeg);
+        onImageSelect(jpeg.split(",")[1], "image/jpeg", jpeg);
       } catch (err) {
-        // Canvas failed — try sending as-is if it's a supported format
-        if (SUPPORTED.includes(type)) {
-          const base64 = dataUrl.split(",")[1];
-          onImageSelect(base64, type, dataUrl);
-        } else {
-          alert(`이미지 처리 실패: ${err instanceof Error ? err.message : "알 수 없는 오류"}`);
-        }
+        alert(`이미지 처리 실패: ${err instanceof Error ? err.message : "알 수 없는 오류"}\nJPEG/PNG/WebP 파일을 사용해주세요.`);
       }
     };
     reader.readAsDataURL(file);
@@ -74,12 +57,12 @@ export default function PhotoUpload({ onImageSelect }: Props) {
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) handleFile(file);
-    e.target.value = ""; // allow re-selecting same file
+    e.target.value = "";
   };
 
   return (
     <div className="flex flex-col gap-4 w-full max-w-sm mx-auto">
-      {/* Camera */}
+      {/* Camera — capture="environment" opens rear camera directly on mobile */}
       <button
         onClick={() => cameraRef.current?.click()}
         className="flex items-center justify-center gap-3 w-full py-4 rounded-2xl border border-[#8b1a2e]/40 bg-[#8b1a2e]/10 text-[#8b1a2e] hover:bg-[#8b1a2e]/20 transition-colors text-lg font-medium"
@@ -92,10 +75,11 @@ export default function PhotoUpload({ onImageSelect }: Props) {
         </svg>
         사진 촬영
       </button>
-      <input ref={cameraRef} type="file" accept="image/jpeg,image/png,image/webp"
-        capture="environment" className="hidden" onChange={onChange} />
+      {/* capture="environment" = 후면 카메라 바로 열기 */}
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment"
+        className="hidden" onChange={onChange} />
 
-      {/* Gallery */}
+      {/* Gallery — accept="image/*" allows HEIC; canvas converts to JPEG */}
       <button
         onClick={() => fileRef.current?.click()}
         className="flex items-center justify-center gap-3 w-full py-4 rounded-2xl border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 transition-colors text-lg font-medium"
@@ -106,7 +90,8 @@ export default function PhotoUpload({ onImageSelect }: Props) {
         </svg>
         갤러리에서 선택
       </button>
-      <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif"
+      {/* accept="image/*" = HEIC 포함 모든 포맷 허용 (canvas가 JPEG로 변환) */}
+      <input ref={fileRef} type="file" accept="image/*"
         className="hidden" onChange={onChange} />
     </div>
   );
