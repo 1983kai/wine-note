@@ -12,25 +12,42 @@ export default function PhotoUpload({ onImageSelect }: Props) {
 
   const handleFile = (file: File) => {
     const reader = new FileReader();
+    reader.onerror = () => alert("파일 읽기 실패");
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
-      const img = new Image();
-      img.onload = () => {
-        const MAX = 1280;
-        let { width, height } = img;
-        if (width > MAX || height > MAX) {
-          if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
-          else { width = Math.round(width * MAX / height); height = MAX; }
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
-        const resized = canvas.toDataURL("image/jpeg", 0.85);
-        const base64 = resized.split(",")[1];
-        onImageSelect(base64, "image/jpeg", resized);
-      };
-      img.src = dataUrl;
+      if (!dataUrl) { alert("이미지 로드 실패"); return; }
+      try {
+        const img = new Image();
+        img.onerror = () => {
+          // fallback: send as-is
+          const base64 = dataUrl.split(",")[1];
+          const mimeType = dataUrl.match(/:(.*?);/)?.[1] || "image/jpeg";
+          onImageSelect(base64, mimeType, dataUrl);
+        };
+        img.onload = () => {
+          try {
+            const MAX = 1280;
+            let { width, height } = img;
+            if (width > MAX || height > MAX) {
+              if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
+              else { width = Math.round(width * MAX / height); height = MAX; }
+            }
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+            const resized = canvas.toDataURL("image/jpeg", 0.85);
+            onImageSelect(resized.split(",")[1], "image/jpeg", resized);
+          } catch {
+            // canvas failed, send original
+            const base64 = dataUrl.split(",")[1];
+            onImageSelect(base64, file.type || "image/jpeg", dataUrl);
+          }
+        };
+        img.src = dataUrl;
+      } catch {
+        alert("이미지 처리 오류");
+      }
     };
     reader.readAsDataURL(file);
   };
