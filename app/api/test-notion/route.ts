@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { Client } from "@notionhq/client";
 
 export async function GET() {
   const token = process.env.NOTION_API_KEY ?? "";
@@ -12,20 +11,38 @@ export async function GET() {
     dbId,
   };
 
+  // Bypass SDK — raw fetch to Notion API
   try {
-    const notion = new Client({ auth: token });
-    // Step 1: check if token itself is valid (no DB permission needed)
-    const me = await notion.users.me({});
-    // Step 2: try to access the DB
-    try {
-      const db = await notion.databases.retrieve({ database_id: dbId });
-      return NextResponse.json({ ok: true, integration: me.name, dbTitle: (db as any).title?.[0]?.plain_text, ...info });
-    } catch (dbErr) {
-      const dbMsg = dbErr instanceof Error ? dbErr.message : String(dbErr);
-      return NextResponse.json({ tokenOk: true, integration: me.name, dbError: dbMsg, ...info });
+    const meRes = await fetch("https://api.notion.com/v1/users/me", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Notion-Version": "2022-06-28",
+      },
+    });
+    const meData = await meRes.json();
+
+    if (!meRes.ok) {
+      return NextResponse.json({ step: "users/me", status: meRes.status, error: meData, ...info });
     }
+
+    // Token is valid — try DB
+    const dbRes = await fetch(`https://api.notion.com/v1/databases/${dbId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Notion-Version": "2022-06-28",
+      },
+    });
+    const dbData = await dbRes.json();
+
+    return NextResponse.json({
+      ok: dbRes.ok,
+      integration: meData.name,
+      dbStatus: dbRes.status,
+      dbError: dbRes.ok ? null : dbData,
+      ...info,
+    });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ ok: false, error: msg, ...info });
+    return NextResponse.json({ fetchError: msg, ...info });
   }
 }
